@@ -1,0 +1,138 @@
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.core.config import get_settings
+from app.core.database import engine
+from app.core.errors import (
+    DSBException,
+    dsb_exception_handler,
+    general_exception_handler,
+    http_exception_handler,
+)
+from app.core.logging import setup_logging, get_structured_logger
+
+# Setup logging
+setup_logging()
+logger = get_structured_logger(__name__)
+
+# Get settings
+settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan events."""
+    # Startup
+    logger.info("Starting DSB Backend API", version="1.0.0", environment=settings.environment)
+    
+    # Test database connection
+    try:
+        async with engine.begin() as conn:
+            logger.info("Database connection established")
+    except Exception as e:
+        logger.error("Failed to connect to database", error=str(e))
+        raise
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down DSB Backend API")
+    await engine.dispose()
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="Digital Suggestion Box API",
+    description="Backend API for the Digital Suggestion Box system",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure this properly for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Exception handlers
+app.add_exception_handler(DSBException, dsb_exception_handler)
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {
+        "ok": True,
+        "data": {
+            "status": "healthy",
+            "version": "1.0.0",
+            "environment": settings.environment,
+        }
+    }
+
+
+# Import API routers
+from app.api.v1 import suggestions, clusters, topics, templates, documents, jobs, metrics
+
+# Include API routers
+app.include_router(
+    suggestions.router,
+    prefix="/v1/suggestions",
+    tags=["suggestions"],
+)
+
+app.include_router(
+    clusters.router,
+    prefix="/v1/clusters",
+    tags=["clusters"],
+)
+
+app.include_router(
+    topics.router,
+    prefix="/v1/topics",
+    tags=["topics"],
+)
+
+app.include_router(
+    templates.router,
+    prefix="/v1/templates",
+    tags=["templates"],
+)
+
+app.include_router(
+    documents.router,
+    prefix="/v1/documents",
+    tags=["documents"],
+)
+
+app.include_router(
+    jobs.router,
+    prefix="/v1/jobs",
+    tags=["jobs"],
+)
+
+app.include_router(
+    metrics.router,
+    prefix="/v1/metrics",
+    tags=["metrics"],
+)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=9000,
+        reload=settings.environment == "development",
+        workers=1 if settings.environment == "development" else settings.uvicorn_workers,
+    )
