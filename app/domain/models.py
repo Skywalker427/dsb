@@ -72,6 +72,18 @@ class SuggestionTag(Base):
     )
 
 
+class SuggestionTopic(Base):
+    __tablename__ = "suggestion_topics"
+
+    suggestion_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("suggestions.id"), primary_key=True
+    )
+    topic_id: Mapped[UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("topics.id"), primary_key=True
+    )
+    confidence = Column(Float, nullable=False, default=0.5)
+
+
 class DocumentTag(Base):
     __tablename__ = "document_tags"
 

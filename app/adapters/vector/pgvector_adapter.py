@@ -105,19 +105,18 @@ class PgVectorAdapter:
             # Set ef_search for query
             await self.db.execute(text(f"SET hnsw.ef_search = {settings.hnsw_ef_search}"))
             
+            # Convert embedding to string format for SQL
+            embedding_str = '[' + ','.join(map(str, embedding)) + ']'
+            
             # Find similar suggestions using cosine similarity
-            result = await self.db.execute(text("""
-                SELECT id, 1 - (embedding <=> :embedding) as similarity
+            result = await self.db.execute(text(f"""
+                SELECT id, 1 - (embedding <=> '{embedding_str}'::vector) as similarity
                 FROM suggestions 
                 WHERE embedding IS NOT NULL 
-                AND 1 - (embedding <=> :embedding) >= :min_similarity
-                ORDER BY embedding <=> :embedding
-                LIMIT :limit
-            """), {
-                "embedding": embedding,
-                "min_similarity": min_similarity,
-                "limit": limit
-            })
+                AND 1 - (embedding <=> '{embedding_str}'::vector) >= {min_similarity}
+                ORDER BY embedding <=> '{embedding_str}'::vector
+                LIMIT {limit}
+            """))
             
             similar_suggestions = [(row.id, row.similarity) for row in result]
             logger.info(
@@ -146,19 +145,18 @@ class PgVectorAdapter:
             # Set ef_search for query
             await self.db.execute(text(f"SET hnsw.ef_search = {settings.hnsw_ef_search}"))
             
+            # Convert embedding to string format for SQL
+            embedding_str = '[' + ','.join(map(str, embedding)) + ']'
+            
             # Find similar topics using cosine similarity
-            result = await self.db.execute(text("""
-                SELECT id, label, 1 - (embedding <=> :embedding) as similarity
+            result = await self.db.execute(text(f"""
+                SELECT id, label, 1 - (embedding <=> '{embedding_str}'::vector) as similarity
                 FROM topics 
                 WHERE embedding IS NOT NULL 
-                AND 1 - (embedding <=> :embedding) >= :min_similarity
-                ORDER BY embedding <=> :embedding
-                LIMIT :limit
-            """), {
-                "embedding": embedding,
-                "min_similarity": min_similarity,
-                "limit": limit
-            })
+                AND 1 - (embedding <=> '{embedding_str}'::vector) >= {min_similarity}
+                ORDER BY embedding <=> '{embedding_str}'::vector
+                LIMIT {limit}
+            """))
             
             similar_topics = [(row.id, row.label, row.similarity) for row in result]
             logger.info(

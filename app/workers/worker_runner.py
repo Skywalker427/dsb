@@ -7,6 +7,8 @@ from uuid import UUID
 from app.core.logging import get_structured_logger
 from app.workers.process_suggestion import process_suggestion_worker
 from app.workers.extract_tags import extract_tags_worker
+from app.workers.extract_topics import extract_topics_worker
+from app.workers.generate_topic_embedding import generate_topic_embedding_worker
 from app.workers.rebuild_clusters import (
     rebuild_tag_clusters_worker,
     rebuild_topic_clusters_worker,
@@ -35,6 +37,8 @@ class WorkerRunner:
         self.job_handlers: Dict[str, Callable[[UUID, Dict[str, Any]], Any]] = {
             "PROCESS_SUGGESTION": process_suggestion_worker,
             "EXTRACT_TAGS": extract_tags_worker,
+            "EXTRACT_TOPICS": extract_topics_worker,
+            "GENERATE_TOPIC_EMBEDDING": generate_topic_embedding_worker,
             "REBUILD_TAG_CLUSTERS": rebuild_tag_clusters_worker,
             "REBUILD_TOPIC_CLUSTERS": rebuild_topic_clusters_worker,
             "FUSION_CLUSTERING": fusion_clustering_worker,
@@ -45,6 +49,7 @@ class WorkerRunner:
         self.polling_intervals = {
             "PROCESS_SUGGESTION": 2,    # Fast polling for user-triggered jobs
             "EXTRACT_TAGS": 5,          # Medium polling
+            "EXTRACT_TOPICS": 5,        # Medium polling
             "REBUILD_TAG_CLUSTERS": 30, # Slow polling for maintenance jobs
             "REBUILD_TOPIC_CLUSTERS": 30,
             "FUSION_CLUSTERING": 60,
@@ -127,7 +132,7 @@ class WorkerRunner:
         
         # Group job types by similar polling intervals
         fast_jobs = ["PROCESS_SUGGESTION"]
-        medium_jobs = ["EXTRACT_TAGS"]
+        medium_jobs = ["EXTRACT_TAGS", "EXTRACT_TOPICS", "GENERATE_TOPIC_EMBEDDING"]
         slow_jobs = ["REBUILD_TAG_CLUSTERS", "REBUILD_TOPIC_CLUSTERS"]
         very_slow_jobs = ["FUSION_CLUSTERING"]
         

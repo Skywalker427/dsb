@@ -51,6 +51,18 @@ async def process_suggestion_worker(job_id: UUID, payload: dict) -> dict:
             # Process the suggestion
             result = await processing_service.process_suggestion(suggestion_id)
             
+            # Create job to extract topics from the suggestion
+            topic_job = await jobs_repo.create(
+                job_type="EXTRACT_TOPICS",
+                payload={"suggestion_id": str(suggestion_id)}
+            )
+            
+            logger.info(
+                "Created topic extraction job",
+                suggestion_id=str(suggestion_id),
+                topic_job_id=str(topic_job.id)
+            )
+            
             # Update job status to succeeded
             await jobs_repo.update_status(job_id, "SUCCEEDED")
             
