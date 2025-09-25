@@ -38,6 +38,9 @@ dependencies = [
     "aiofiles>=23.2.1",
     "celery>=5.3.4",
     "flower>=2.0.1",
+    "markdown>=3.9",
+    "python-docx>=1.2.0",
+    "pypdf2>=3.0.1",
 ]
 
 [project.optional-dependencies]

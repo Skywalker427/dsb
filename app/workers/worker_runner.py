@@ -14,6 +14,7 @@ from app.workers.rebuild_clusters import (
     rebuild_topic_clusters_worker,
     fusion_clustering_worker
 )
+from app.workers.generate_document import generate_document_worker
 
 logger = get_structured_logger(__name__)
 
@@ -39,6 +40,7 @@ class WorkerRunner:
             "EXTRACT_TAGS": extract_tags_worker,
             "EXTRACT_TOPICS": extract_topics_worker,
             "GENERATE_TOPIC_EMBEDDING": generate_topic_embedding_worker,
+            "GENERATE_DOCUMENT": generate_document_worker,
             "REBUILD_TAG_CLUSTERS": rebuild_tag_clusters_worker,
             "REBUILD_TOPIC_CLUSTERS": rebuild_topic_clusters_worker,
             "FUSION_CLUSTERING": fusion_clustering_worker,
@@ -131,7 +133,7 @@ class WorkerRunner:
         logger.info("Starting all background workers")
         
         # Group job types by similar polling intervals
-        fast_jobs = ["PROCESS_SUGGESTION"]
+        fast_jobs = ["PROCESS_SUGGESTION", "GENERATE_DOCUMENT"]
         medium_jobs = ["EXTRACT_TAGS", "EXTRACT_TOPICS", "GENERATE_TOPIC_EMBEDDING"]
         slow_jobs = ["REBUILD_TAG_CLUSTERS", "REBUILD_TOPIC_CLUSTERS"]
         very_slow_jobs = ["FUSION_CLUSTERING"]

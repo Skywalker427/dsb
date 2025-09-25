@@ -156,8 +156,29 @@ class DocumentCreate(BaseModel):
     title: Optional[str] = None
     template_id: UUID
     cluster_ids: Optional[List[UUID]] = []
+    topic_ids: Optional[List[UUID]] = []
     auto_render: bool = False
     render_format: Optional[DocFormat] = None
+
+
+class DocumentGenerateFromCluster(BaseModel):
+    cluster_id: UUID
+    template_id: UUID
+    title: Optional[str] = None
+
+
+class DocumentGenerateFromTopic(BaseModel):
+    topic_id: UUID
+    template_id: UUID
+    title: Optional[str] = None
+
+
+class DocumentUpdate(BaseModel):
+    title: Optional[str] = None
+    draft_content: Optional[Dict[str, Any]] = None
+    status: Optional[DocStatus] = None
+    rendered_format: Optional[DocFormat] = None
+    rendered_url: Optional[str] = None
 
 
 class DocumentResponse(BaseModel):
@@ -171,6 +192,18 @@ class DocumentResponse(BaseModel):
     created_by: Optional[UUID]
     created_at: datetime
     updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class DocumentVersionResponse(BaseModel):
+    id: UUID
+    document_id: UUID
+    version_no: int
+    diff: Optional[Dict[str, Any]]
+    prompt: Optional[str]
+    created_at: datetime
 
     class Config:
         from_attributes = True
