@@ -123,6 +123,16 @@ class TemplateCreate(BaseModel):
     content_markdown: str
 
 
+class TemplateUpdate(BaseModel):
+    name: Optional[str] = Field(None, max_length=120)
+    description: Optional[str] = None
+    version: Optional[str] = Field(None, max_length=50)
+    kind: Optional[str] = Field(None, max_length=100)
+    engine: Optional[TemplateEngine] = None
+    content_markdown: Optional[str] = None
+    active: Optional[bool] = None
+
+
 class TemplateResponse(BaseModel):
     id: UUID
     name: str
