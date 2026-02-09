@@ -7,12 +7,23 @@ import os
 import aiofiles
 from openai import AsyncOpenAI
 
+from app.core.config import get_settings
+
+settings = get_settings()
+
 
 class TemplateProcessor:
     """Service for processing sample documents and converting them to templates using LLM."""
     
     def __init__(self, openai_client: Optional[AsyncOpenAI] = None):
-        self.openai_client = openai_client or AsyncOpenAI()
+        if openai_client:
+            self.openai_client = openai_client
+        else:
+            # Only create OpenAI client if API key is available
+            if settings.openai_api_key:
+                self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+            else:
+                self.openai_client = None
         self.supported_extensions = {'.docx', '.doc', '.pdf', '.txt', '.md'}
     
     async def convert_sample_to_template(

@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.cache.redis_cache import cache
-from app.adapters.llm.openai_provider import OpenAIProvider
+from app.adapters.llm import get_llm_provider
 from app.adapters.repos.suggestions_repo import SuggestionRepository
 from app.adapters.repos.clusters_repo import ClusterRepository
 from app.adapters.vector.pgvector_adapter import PgVectorAdapter
@@ -27,7 +27,7 @@ class SuggestionProcessingService:
         self.suggestions_repo = SuggestionRepository(db)
         self.clusters_repo = ClusterRepository(db)
         self.vector_adapter = PgVectorAdapter(db)
-        self.llm_provider = OpenAIProvider()
+        self.llm_provider = get_llm_provider()
     
     async def process_suggestion(self, suggestion_id: UUID) -> dict:
         """Complete processing pipeline for a suggestion."""
@@ -48,12 +48,17 @@ class SuggestionProcessingService:
             # Step 3: Store embedding
             await self.vector_adapter.store_suggestion_embedding(suggestion_id, embedding)
             
-            # Step 4: Find or create appropriate cluster
+            # Step 4: Extract and store tags
+            tags = await self.llm_provider.extract_tags(processed_text, max_tags=10)
+            logger.info("Extracted tags", suggestion_id=str(suggestion_id), tags=tags, count=len(tags))
+            
+            # Step 5: Find or create appropriate cluster
             cluster_info = await self._assign_to_cluster(suggestion_id, embedding)
             
-            # Step 5: Update suggestion status
+            # Step 6: Update suggestion with tags and status
             await self.suggestions_repo.update(
                 suggestion_id,
+                tags=tags,
                 status=SuggestionStatus.PROCESSED
             )
             
@@ -292,7 +297,7 @@ class TagExtractionService:
     
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.llm_provider = OpenAIProvider()
+        self.llm_provider = get_llm_provider()
     
     async def extract_tags_from_text(self, text: str, max_tags: int = 10) -> List[str]:
         """Extract tags from text using LLM + YAKE hybrid approach."""

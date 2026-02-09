@@ -1,16 +1,30 @@
 import json
 from functools import lru_cache
-from typing import Any, Dict, List, Optional
 
-from pydantic import Field, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     # External Services (Required)
     database_url: str
-    redis_url: Optional[str] = None
-    openai_api_key: Optional[str] = None
+    redis_url: str | None = None
+    openai_api_key: str | None = None
+    # Tolerate optional OpenAI SDK envs if present
+    openai_api_type: str | None = None
+    openai_api_base: str | None = None
+    # Azure OpenAI (Optional)
+    azure_openai_enabled: bool = False
+    azure_openai_api_key: str | None = None
+    azure_openai_endpoint: str | None = None  # e.g., https://<resource>.openai.azure.com
+    # Default API version (used if specific ones below are not set)
+    azure_openai_api_version: str = "2024-10-21"
+    # Specific API versions for services
+    azure_openai_chat_api_version: str | None = None
+    azure_openai_embeddings_api_version: str | None = None
+    # Optional APIM path prefixes (e.g., 'za') to prepend before /deployments
+    azure_openai_apim_chat_prefix: str | None = None
+    azure_openai_apim_embeddings_prefix: str | None = None
 
     # Application Settings
     environment: str = "development"
@@ -18,10 +32,14 @@ class Settings(BaseSettings):
     cache_enabled: bool = False
 
     # Embedding Configuration
-    embedding_provider: str = "openai"
+    embedding_provider: str = "openai"  # options: openai, azure, local
     embedding_model: str = "text-embedding-3-small"
     embedding_dims: int = 1536
-    local_embedding_model_path: Optional[str] = None
+    local_embedding_model_path: str | None = None
+
+    # LLM (chat/completions) Configuration
+    llm_provider: str = "openai"  # options: openai, azure, local
+    llm_model: str = "gpt-3.5-turbo"  # for OpenAI; for Azure this is the deployment name
 
     # Vector Index
     vector_index: str = "hnsw"
@@ -65,31 +83,39 @@ class Settings(BaseSettings):
     uvicorn_port: int = 9000
 
     # Security (optional)
-    jwt_secret_key: Optional[str] = None
+    jwt_secret_key: str | None = None
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
 
     # Observability
-    otel_exporter_otlp_endpoint: Optional[str] = None
+    otel_exporter_otlp_endpoint: str | None = None
 
     # Computed properties
     @property
-    def fusion_weights_dict(self) -> Dict[str, float]:
+    def fusion_weights_dict(self) -> dict[str, float]:
         try:
             return json.loads(self.fusion_weights)
         except (json.JSONDecodeError, TypeError):
             return {"emb": 0.6, "tag": 0.2, "topic": 0.2}
 
     @property
-    def template_allowed_mimes_list(self) -> List[str]:
+    def template_allowed_mimes_list(self) -> list[str]:
         return [mime.strip() for mime in self.template_allowed_mimes.split(",")]
 
     @field_validator("embedding_provider")
     @classmethod
     def validate_embedding_provider(cls, v: str) -> str:
-        allowed = ["openai", "local"]
+        allowed = ["openai", "azure", "local"]
         if v not in allowed:
             raise ValueError(f"embedding_provider must be one of {allowed}")
+        return v
+
+    @field_validator("llm_provider")
+    @classmethod
+    def validate_llm_provider(cls, v: str) -> str:
+        allowed = ["openai", "azure", "local"]
+        if v not in allowed:
+            raise ValueError(f"llm_provider must be one of {allowed}")
         return v
 
     @field_validator("vector_index")
@@ -122,7 +148,7 @@ class Settings(BaseSettings):
         case_sensitive = False
 
 
-@lru_cache()
+@lru_cache
 def get_settings() -> Settings:
     """Get cached settings instance."""
     return Settings()

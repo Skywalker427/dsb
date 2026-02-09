@@ -1,8 +1,7 @@
 import json
 import re
-from typing import List, Dict, Any, Optional
+from typing import Any
 
-import openai
 from openai import AsyncOpenAI
 
 from app.adapters.llm.base import EmbeddingProvider, LLMProvider
@@ -17,22 +16,65 @@ settings = get_settings()
 class OpenAIProvider(EmbeddingProvider, LLMProvider):
     """OpenAI provider for embeddings and LLM operations."""
     
-    def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or settings.openai_api_key
+    def __init__(self, api_key: str | None = None):
+        # Determine provider (openai vs azure) and credentials
+        provider = settings.llm_provider or "openai"
+        emb_provider = settings.embedding_provider or "openai"
+        # Prefer explicit api_key; otherwise choose based on provider
+        if api_key:
+            self.api_key = api_key
+        elif provider == "azure":
+            self.api_key = settings.azure_openai_api_key
+        else:
+            self.api_key = settings.openai_api_key
         if not self.api_key:
             raise DependencyError("OpenAI API key is required", "OpenAI")
         
-        self.client = AsyncOpenAI(api_key=self.api_key)
+        # Configure client(s)
+        if provider == "azure" or emb_provider == "azure":
+            base_url = settings.azure_openai_endpoint
+            if not base_url:
+                raise DependencyError("Azure OpenAI endpoint is required when azure provider is selected", "AzureOpenAI")
+
+            # Determine API versions with fallbacks
+            chat_api_version = settings.azure_openai_chat_api_version or settings.azure_openai_api_version
+            emb_api_version = settings.azure_openai_embeddings_api_version or settings.azure_openai_api_version
+
+            # If using Azure for LLM chat
+            if provider == "azure":
+                self.client = AsyncOpenAI(
+                    api_key=self.api_key,
+                    base_url=base_url.rstrip("/"),
+                    default_query={"api-version": chat_api_version},
+                )
+            else:
+                self.client = AsyncOpenAI(api_key=self.api_key)
+
+            # Optional separate embeddings client if embeddings use Azure but LLM does not
+            self.embeddings_client = None
+            if emb_provider == "azure":
+                self.embeddings_client = AsyncOpenAI(
+                    api_key=self.api_key,
+                    base_url=base_url.rstrip("/"),
+                    default_query={"api-version": emb_api_version},
+                )
+        else:
+            self.client = AsyncOpenAI(api_key=self.api_key)
+            self.embeddings_client = None
+
+        # Models
         self.embedding_model = settings.embedding_model
+        self.chat_model = settings.llm_model
         self.embedding_dims = settings.embedding_dims
     
-    async def generate_embedding(self, text: str) -> List[float]:
+    async def generate_embedding(self, text: str) -> list[float]:
         """Generate embedding for given text."""
         try:
             # Preprocess text to remove noise
             clean_text = await self.preprocess_text(text)
             
-            response = await self.client.embeddings.create(
+            client = self.embeddings_client or self.client
+            response = await client.embeddings.create(
                 model=self.embedding_model,
                 input=clean_text,
                 encoding_format="float"
@@ -50,15 +92,16 @@ class OpenAIProvider(EmbeddingProvider, LLMProvider):
             
         except Exception as e:
             logger.error("Failed to generate embedding", error=str(e))
-            raise DependencyError(f"OpenAI embedding failed: {str(e)}", "OpenAI")
+            raise DependencyError(f"OpenAI embedding failed: {str(e)}", "OpenAI") from e
     
-    async def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
+    async def generate_embeddings_batch(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for multiple texts."""
         try:
             # Preprocess all texts
             clean_texts = [await self.preprocess_text(text) for text in texts]
             
-            response = await self.client.embeddings.create(
+            client = self.embeddings_client or self.client
+            response = await client.embeddings.create(
                 model=self.embedding_model,
                 input=clean_texts,
                 encoding_format="float"
@@ -76,13 +119,13 @@ class OpenAIProvider(EmbeddingProvider, LLMProvider):
             
         except Exception as e:
             logger.error("Failed to generate batch embeddings", error=str(e))
-            raise DependencyError(f"OpenAI batch embedding failed: {str(e)}", "OpenAI")
+            raise DependencyError(f"OpenAI batch embedding failed: {str(e)}", "OpenAI") from e
     
     def get_embedding_dimensions(self) -> int:
         """Get the dimensions of embeddings produced by this provider."""
         return self.embedding_dims
     
-    async def extract_tags(self, text: str, max_tags: int = 10) -> List[str]:
+    async def extract_tags(self, text: str, max_tags: int = 10) -> list[str]:
         """Extract tags/keywords from text using GPT."""
         try:
             system_prompt = f"""
@@ -100,7 +143,7 @@ class OpenAIProvider(EmbeddingProvider, LLMProvider):
             user_prompt = f"Extract tags from this text:\n\n{text}"
             
             response = await self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model=self.chat_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -136,11 +179,11 @@ class OpenAIProvider(EmbeddingProvider, LLMProvider):
             return []
     
     async def extract_topics(
-        self, 
-        text: str, 
+        self,
+        text: str,
         max_topics: int = 5,
-        existing_topics: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
+        existing_topics: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """Extract topics from text using GPT."""
         try:
             existing_context = ""
@@ -162,7 +205,7 @@ class OpenAIProvider(EmbeddingProvider, LLMProvider):
             user_prompt = f"Extract topics from this text:\n\n{text}"
             
             response = await self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model=self.chat_model,
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}

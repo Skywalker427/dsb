@@ -7,7 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.repos.jobs_repo import JobRepository
 from app.adapters.repos.suggestions_repo import SuggestionRepository
 from app.adapters.repos.topics_repo import TopicRepository
-from app.adapters.llm.openai_provider import OpenAIProvider
+from app.adapters.llm import get_llm_provider
+from app.adapters.llm.base import EmbeddingProvider, LLMProvider
 from app.core.config import get_settings
 from app.core.logging import get_structured_logger
 from app.core.database import async_session_maker
@@ -59,7 +60,7 @@ async def extract_topics_worker(job_id: UUID, payload: Dict[str, Any]) -> Dict[s
                 raise ValueError(f"Suggestion {suggestion_id} not found")
             
             # Extract topics using LLM
-            llm_provider = OpenAIProvider()
+            llm_provider = get_llm_provider()
             topics_repo = TopicRepository(db)
             
             # Combine title and body for topic extraction
@@ -148,7 +149,7 @@ async def extract_topics_worker(job_id: UUID, payload: Dict[str, Any]) -> Dict[s
 
 async def _find_or_create_topic(
     topics_repo: TopicRepository, 
-    llm_provider: OpenAIProvider, 
+    llm_provider: EmbeddingProvider, 
     topic_label: str
 ) -> Dict[str, Any]:
     """

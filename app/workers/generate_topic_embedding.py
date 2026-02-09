@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.repos.jobs_repo import JobRepository
 from app.adapters.repos.topics_repo import TopicRepository
-from app.adapters.llm.openai_provider import OpenAIProvider
+from app.adapters.llm import get_llm_provider
 from app.core.config import get_settings
 from app.core.logging import get_structured_logger
 from app.core.database import async_session_maker
@@ -56,7 +56,7 @@ async def generate_topic_embedding_worker(job_id: UUID, payload: Dict[str, Any])
                 raise ValueError(f"Topic {topic_id} not found")
             
             # Generate embedding using LLM
-            llm_provider = OpenAIProvider()
+            llm_provider = get_llm_provider()
             embedding = await llm_provider.generate_embedding(topic.label)
             
             # Store embedding
