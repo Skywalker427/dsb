@@ -211,9 +211,11 @@ show_status() {
     
     echo
     
-    # Database Status
+    # Database Status (psql expects postgresql://, not postgresql+psycopg://)
     if command -v psql >/dev/null 2>&1 && [ -n "$DATABASE_URL" ]; then
-        if psql "$DATABASE_URL" -c "SELECT 1;" >/dev/null 2>&1; then
+        psql_url="${DATABASE_URL/postgresql+psycopg/postgresql}"
+        psql_url="${psql_url/postgresql+asyncpg/postgresql}"
+        if psql "$psql_url" -c "SELECT 1;" >/dev/null 2>&1; then
             echo -e "  ${GREEN}● Database${NC}      - Connected"
         else
             echo -e "  ${RED}○ Database${NC}      - Connection failed"
