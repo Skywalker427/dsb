@@ -70,6 +70,8 @@ class Settings(BaseSettings):
     markdown_engine: str = "markdown-it-py"
     pandoc_enabled: bool = False
 
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+
     # API Settings
     allow_public_post: bool = True
     allow_anonymous_post: bool = False

@@ -26,7 +26,7 @@ async def get_job(
     
     return ApiResponse(
         ok=True,
-        data=JobResponse.from_orm(job),
+        data=JobResponse.model_validate(job),
     )
 
 
@@ -51,7 +51,7 @@ async def get_jobs(
         jobs = []
         total = 0
     
-    job_responses = [JobResponse.from_orm(j) for j in jobs]
+    job_responses = [JobResponse.model_validate(j) for j in jobs]
     
     return ApiResponse(
         ok=True,
@@ -61,7 +61,7 @@ async def get_jobs(
             page_size=page_size,
             total=total,
             total_pages=(total + page_size - 1) // page_size,
-        ).dict(),
+        ).model_dump(),
     )
 
 
@@ -79,7 +79,7 @@ async def retry_job(
     
     return ApiResponse(
         ok=True,
-        data=JobResponse.from_orm(job),
+        data=JobResponse.model_validate(job),
     )
 
 

@@ -136,7 +136,7 @@ async def get_documents(
     )
     
     # Convert to response models
-    document_responses = [DocumentResponse.from_orm(d) for d in documents]
+    document_responses = [DocumentResponse.model_validate(d) for d in documents]
     
     return ApiResponse(
         ok=True,
@@ -146,7 +146,7 @@ async def get_documents(
             page_size=page_size,
             total=total,
             total_pages=(total + page_size - 1) // page_size,
-        ).dict(),
+        ).model_dump(),
     )
 
 
@@ -164,7 +164,7 @@ async def get_document(
     
     return ApiResponse(
         ok=True,
-        data=DocumentResponse.from_orm(document),
+        data=DocumentResponse.model_validate(document),
     )
 
 
@@ -194,7 +194,7 @@ async def update_document(
                 diff_data = {
                     "old_content": existing.draft_content,
                     "new_content": updates.draft_content,
-                    "changed_fields": [k for k, v in updates.dict().items() if v is not None],
+                    "changed_fields": [k for k, v in updates.model_dump().items() if v is not None],
                 }
             
             await docs_repo.create_version(
@@ -205,13 +205,13 @@ async def update_document(
             )
         
         # Filter out None values
-        update_data = {k: v for k, v in updates.dict().items() if v is not None}
+        update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
         
         document = await docs_repo.update(document_id, **update_data)
         
         return ApiResponse(
             ok=True,
-            data=DocumentResponse.from_orm(document),
+            data=DocumentResponse.model_validate(document),
         )
         
     except Exception as e:
@@ -309,7 +309,7 @@ async def get_document_versions(
         raise NotFoundError(f"Document {document_id} not found", "Document")
     
     versions = await docs_repo.get_document_versions(document_id)
-    version_responses = [DocumentVersionResponse.from_orm(v) for v in versions]
+    version_responses = [DocumentVersionResponse.model_validate(v) for v in versions]
     
     return ApiResponse(
         ok=True,

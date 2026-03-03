@@ -23,7 +23,19 @@ class EmbeddingProvider(ABC):
 
 class LLMProvider(ABC):
     """Abstract base class for LLM providers."""
-    
+
+    @abstractmethod
+    async def chat_completion(
+        self,
+        messages: List[Dict[str, str]],
+        *,
+        model: Optional[str] = None,
+        temperature: float = 0.2,
+        max_tokens: int = 4000,
+    ) -> str:
+        """Send messages to the chat model and return the assistant message content."""
+        pass
+
     @abstractmethod
     async def extract_tags(self, text: str, max_tags: int = 10) -> List[str]:
         """Extract tags/keywords from text."""

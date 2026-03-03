@@ -70,7 +70,14 @@ start_api() {
         return 0
     fi
     
-    # Activate virtual environment and start API
+    local pids_on_port
+    pids_on_port=$(lsof -ti :9000 2>/dev/null)
+    if [ -n "$pids_on_port" ]; then
+        log_info "Freeing port 9000 (killing existing process(es): $pids_on_port)"
+        echo "$pids_on_port" | xargs kill -9 2>/dev/null || true
+        sleep 1
+    fi
+
     cd "$PROJECT_DIR"
     source .venv/bin/activate
     export PYTHONPATH="$PROJECT_DIR"
@@ -83,8 +90,6 @@ start_api() {
     
     local api_pid=$!
     echo $api_pid > "$PIDFILE_API"
-    
-    # Wait a moment and check if it started successfully
     sleep 2
     if is_running "$PIDFILE_API"; then
         log_success "API server started (PID: $api_pid)"

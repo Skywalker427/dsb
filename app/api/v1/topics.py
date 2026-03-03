@@ -34,7 +34,7 @@ async def get_topics(
     topics = await topics_repo.get_all(query, min_support, offset, page_size)
     total = await topics_repo.count(query, min_support)
     
-    topic_responses = [TopicResponse.from_orm(t) for t in topics]
+    topic_responses = [TopicResponse.model_validate(t) for t in topics]
     
     return ApiResponse(
         ok=True,
@@ -44,7 +44,7 @@ async def get_topics(
             page_size=page_size,
             total=total,
             total_pages=(total + page_size - 1) // page_size,
-        ).dict(),
+        ).model_dump(),
     )
 
 
@@ -62,7 +62,7 @@ async def get_topic(
     
     return ApiResponse(
         ok=True,
-        data=TopicResponse.from_orm(topic),
+        data=TopicResponse.model_validate(topic),
     )
 
 
@@ -86,7 +86,7 @@ async def create_topic(
     
     return ApiResponse(
         ok=True,
-        data=TopicResponse.from_orm(topic),
+        data=TopicResponse.model_validate(topic),
     )
 
 
@@ -105,7 +105,7 @@ async def update_topic(
     
     return ApiResponse(
         ok=True,
-        data=TopicResponse.from_orm(topic),
+        data=TopicResponse.model_validate(topic),
     )
 
 
@@ -124,7 +124,7 @@ async def merge_topics(
     
     return ApiResponse(
         ok=True,
-        data=TopicResponse.from_orm(target_topic),
+        data=TopicResponse.model_validate(target_topic),
     )
 
 
@@ -153,7 +153,7 @@ async def get_topic_suggestions(
     # Format response data
     suggestions_data = [
         {
-            "suggestion": SuggestionResponse.from_orm(suggestion).dict(),
+            "suggestion": SuggestionResponse.model_validate(suggestion).model_dump(),
             "confidence": confidence
         }
         for suggestion, confidence in suggestions_with_confidence
@@ -162,7 +162,7 @@ async def get_topic_suggestions(
     return ApiResponse(
         ok=True,
         data={
-            "topic": TopicResponse.from_orm(topic).dict(),
+            "topic": TopicResponse.model_validate(topic).model_dump(),
             "suggestions": suggestions_data,
             "total": len(suggestions_data)
         }

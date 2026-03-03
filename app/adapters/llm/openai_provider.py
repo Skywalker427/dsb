@@ -124,7 +124,24 @@ class OpenAIProvider(EmbeddingProvider, LLMProvider):
     def get_embedding_dimensions(self) -> int:
         """Get the dimensions of embeddings produced by this provider."""
         return self.embedding_dims
-    
+
+    async def chat_completion(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None = None,
+        temperature: float = 0.2,
+        max_tokens: int = 4000,
+    ) -> str:
+        """Call chat completions and return the assistant message content."""
+        response = await self.client.chat.completions.create(
+            model=model or self.chat_model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return (response.choices[0].message.content or "").strip()
+
     async def extract_tags(self, text: str, max_tags: int = 10) -> list[str]:
         """Extract tags/keywords from text using GPT."""
         try:

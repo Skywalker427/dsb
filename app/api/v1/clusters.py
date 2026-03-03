@@ -44,7 +44,7 @@ async def get_clusters(
     clusters = await clusters_repo.get_all(filters, offset, page_size)
     total = await clusters_repo.count(filters)
     
-    cluster_responses = [ClusterResponse.from_orm(c) for c in clusters]
+    cluster_responses = [ClusterResponse.model_validate(c) for c in clusters]
     
     return ApiResponse(
         ok=True,
@@ -54,7 +54,7 @@ async def get_clusters(
             page_size=page_size,
             total=total,
             total_pages=(total + page_size - 1) // page_size,
-        ).dict(),
+        ).model_dump(),
     )
 
 
@@ -72,7 +72,7 @@ async def get_cluster(
     
     return ApiResponse(
         ok=True,
-        data=ClusterResponse.from_orm(cluster),
+        data=ClusterResponse.model_validate(cluster),
     )
 
 
@@ -88,7 +88,7 @@ async def create_cluster(
     
     return ApiResponse(
         ok=True,
-        data=ClusterResponse.from_orm(cluster),
+        data=ClusterResponse.model_validate(cluster),
     )
 
 
@@ -107,7 +107,7 @@ async def update_cluster(
     
     return ApiResponse(
         ok=True,
-        data=ClusterResponse.from_orm(cluster),
+        data=ClusterResponse.model_validate(cluster),
     )
 
 

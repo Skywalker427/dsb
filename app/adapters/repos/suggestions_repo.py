@@ -21,7 +21,7 @@ class SuggestionRepository:
             category=suggestion_data.category,
             title=suggestion_data.title,
             body=suggestion_data.body,
-            contact=suggestion_data.contact.dict(exclude_unset=True),
+            contact=suggestion_data.contact.model_dump(exclude_unset=True),
             attachments=suggestion_data.attachments or [],
         )
         

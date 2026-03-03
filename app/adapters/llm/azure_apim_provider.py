@@ -87,6 +87,29 @@ class AzureAPIMProvider(EmbeddingProvider, LLMProvider):
     def get_embedding_dimensions(self) -> int:
         return self.embedding_dims
 
+    async def chat_completion(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        model: str | None = None,
+        temperature: float = 0.2,
+        max_tokens: int = 4000,
+    ) -> str:
+        """Call APIM chat completions and return the assistant message content."""
+        mid = f"/{self.chat_prefix}" if self.chat_prefix else ""
+        url = f"{self.base_url}{mid}/deployments/{model or self.chat_model}/chat/completions"
+        params = {"api-version": self.chat_api_version}
+        data = {
+            "model": model or self.chat_model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        resp = await self._client.post(url, headers=self._headers(), params=params, json=data)
+        resp.raise_for_status()
+        payload = resp.json()
+        return payload.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+
     async def extract_tags(self, text: str, max_tags: int = 10) -> list[str]:
         try:
             system_prompt = (

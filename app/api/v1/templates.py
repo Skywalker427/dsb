@@ -36,7 +36,7 @@ async def create_template(
         template = await templates_repo.create(template_data)
         return ApiResponse(
             ok=True,
-            data=TemplateResponse.from_orm(template),
+            data=TemplateResponse.model_validate(template),
         )
     except Exception as e:
         raise ValidationError(f"Failed to create template: {str(e)}")
@@ -72,7 +72,7 @@ async def get_templates(
     )
     
     # Convert to response models
-    template_responses = [TemplateResponse.from_orm(t) for t in templates]
+    template_responses = [TemplateResponse.model_validate(t) for t in templates]
     
     return ApiResponse(
         ok=True,
@@ -82,7 +82,7 @@ async def get_templates(
             page_size=page_size,
             total=total,
             total_pages=(total + page_size - 1) // page_size,
-        ).dict(),
+        ).model_dump(),
     )
 
 
@@ -114,7 +114,7 @@ async def get_template(
     
     return ApiResponse(
         ok=True,
-        data=TemplateResponse.from_orm(template),
+        data=TemplateResponse.model_validate(template),
     )
 
 
@@ -140,12 +140,12 @@ async def update_template(
     
     try:
         # Filter out None values
-        update_data = {k: v for k, v in updates.dict().items() if v is not None}
+        update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
         
         template = await templates_repo.update(template_id, **update_data)
         return ApiResponse(
             ok=True,
-            data=TemplateResponse.from_orm(template),
+            data=TemplateResponse.model_validate(template),
         )
     except Exception as e:
         raise ValidationError(f"Failed to update template: {str(e)}")
@@ -227,7 +227,7 @@ async def create_template_from_sample(
         return ApiResponse(
             ok=True,
             data={
-                **TemplateResponse.from_orm(template).dict(),
+                **TemplateResponse.model_validate(template).model_dump(),
                 "processing_info": {
                     "source_file": file.filename,
                     "placeholders_found": len(template_data.get("placeholders", [])),

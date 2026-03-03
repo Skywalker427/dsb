@@ -5,26 +5,24 @@ import tempfile
 import os
 
 import aiofiles
-from openai import AsyncOpenAI
 
 from app.core.config import get_settings
+from app.adapters.llm import get_llm_provider
 
 settings = get_settings()
 
 
 class TemplateProcessor:
     """Service for processing sample documents and converting them to templates using LLM."""
-    
-    def __init__(self, openai_client: Optional[AsyncOpenAI] = None):
-        if openai_client:
-            self.openai_client = openai_client
-        else:
-            # Only create OpenAI client if API key is available
-            if settings.openai_api_key:
-                self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
-            else:
-                self.openai_client = None
+
+    def __init__(self):
+        self._llm_provider = None
         self.supported_extensions = {'.docx', '.doc', '.pdf', '.txt', '.md'}
+
+    def _get_llm_provider(self):
+        if self._llm_provider is None:
+            self._llm_provider = get_llm_provider()
+        return self._llm_provider
     
     async def convert_sample_to_template(
         self,
@@ -140,11 +138,29 @@ class TemplateProcessor:
             
             try:
                 doc = docx.Document(temp_file_path)
-                text_content = ""
-                
+                parts = []
+
+                # Body paragraphs
                 for paragraph in doc.paragraphs:
-                    text_content += paragraph.text + "\n"
-                
+                    if paragraph.text.strip():
+                        parts.append(paragraph.text)
+
+                # Tables (many Word docs put content in tables)
+                for table in doc.tables:
+                    for row in table.rows:
+                        for cell in row.cells:
+                            for paragraph in cell.paragraphs:
+                                if paragraph.text.strip():
+                                    parts.append(paragraph.text)
+
+                # Headers and footers
+                for section in doc.sections:
+                    for header_footer in (section.header, section.footer):
+                        for paragraph in header_footer.paragraphs:
+                            if paragraph.text.strip():
+                                parts.append(paragraph.text)
+
+                text_content = "\n".join(parts)
                 return text_content.strip()
             finally:
                 os.unlink(temp_file_path)
@@ -218,17 +234,15 @@ Return ONLY valid JSON with this structure:
 Analyze this sample and convert it into a template that can generate similar documents using data from suggestion clusters. Focus on identifying what should be variable vs what should remain static."""
 
         try:
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+            provider = self._get_llm_provider()
+            response_content = await provider.chat_completion(
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
-                temperature=0.2,  # Lower temperature for more consistent output
+                temperature=0.2,
                 max_tokens=4000,
             )
-            
-            response_content = response.choices[0].message.content.strip()
             
             # Extract and parse JSON response
             template_data = self._parse_llm_response(response_content)

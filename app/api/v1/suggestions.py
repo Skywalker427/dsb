@@ -69,7 +69,7 @@ async def get_suggestion(
     
     return ApiResponse(
         ok=True,
-        data=SuggestionResponse.from_orm(suggestion),
+        data=SuggestionResponse.model_validate(suggestion),
     )
 
 
@@ -104,7 +104,7 @@ async def get_suggestions(
     total = await suggestions_repo.count(filters)
     
     # Convert to response models
-    suggestion_responses = [SuggestionResponse.from_orm(s) for s in suggestions]
+    suggestion_responses = [SuggestionResponse.model_validate(s) for s in suggestions]
     
     return ApiResponse(
         ok=True,
@@ -114,7 +114,7 @@ async def get_suggestions(
             page_size=page_size,
             total=total,
             total_pages=(total + page_size - 1) // page_size,
-        ).dict(),
+        ).model_dump(),
     )
 
 
@@ -133,7 +133,7 @@ async def update_suggestion(
     
     return ApiResponse(
         ok=True,
-        data=SuggestionResponse.from_orm(suggestion),
+        data=SuggestionResponse.model_validate(suggestion),
     )
 
 
@@ -179,7 +179,7 @@ async def get_suggestion_topics(
     # Format response data
     topics_data = [
         {
-            "topic": TopicResponse.from_orm(topic).dict(),
+            "topic": TopicResponse.model_validate(topic).model_dump(),
             "confidence": confidence
         }
         for topic, confidence in topics_with_confidence
@@ -188,7 +188,7 @@ async def get_suggestion_topics(
     return ApiResponse(
         ok=True,
         data={
-            "suggestion": SuggestionResponse.from_orm(suggestion).dict(),
+            "suggestion": SuggestionResponse.model_validate(suggestion).model_dump(),
             "topics": topics_data,
             "total": len(topics_data)
         }

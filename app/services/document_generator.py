@@ -4,14 +4,16 @@ import os
 from typing import Dict, List, Optional, Any, Tuple
 from uuid import UUID
 
-from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from app.adapters.llm import get_llm_provider
+from app.adapters.llm.base import LLMProvider
 from app.adapters.repos.clusters_repo import ClusterRepository
 from app.adapters.repos.topics_repo import TopicRepository
 from app.adapters.repos.suggestions_repo import SuggestionRepository
 from app.adapters.repos.templates_repo import TemplateRepository
+from app.core.config import get_settings
 from app.domain.models import Cluster, Topic, Suggestion, Template, Document
 from app.domain.enums import DocStatus
 
@@ -19,18 +21,17 @@ from app.domain.enums import DocStatus
 class DocumentGenerator:
     """Service for generating documents from clusters/topics using iterative LLM processing."""
     
-    def __init__(self, db: AsyncSession, openai_client: Optional[AsyncOpenAI] = None):
+    def __init__(self, db: AsyncSession, llm_provider: Optional[LLMProvider] = None):
         self.db = db
-        self.openai_client = openai_client or AsyncOpenAI()
+        self.llm_provider = llm_provider or get_llm_provider()
+        self.llm_model = get_settings().llm_model
         self.clusters_repo = ClusterRepository(db)
         self.topics_repo = TopicRepository(db)
         self.suggestions_repo = SuggestionRepository(db)
         self.templates_repo = TemplateRepository(db)
-        
-        # Processing configuration from environment variables
         self.max_suggestions = int(os.getenv("DOC_GEN_MAX_SUGGESTIONS", "20"))
         self.suggestions_batch_size = int(os.getenv("DOC_GEN_BATCH_SIZE", "4"))
-        self.max_iterations = max(50, (self.max_suggestions + self.suggestions_batch_size - 1) // self.suggestions_batch_size)  # Safety limit
+        self.max_iterations = max(50, (self.max_suggestions + self.suggestions_batch_size - 1) // self.suggestions_batch_size)
     
     async def generate_document_from_cluster(
         self,
@@ -43,16 +44,12 @@ class DocumentGenerator:
         Generate document from cluster suggestions using iterative LLM processing.
         Returns job payload data for background processing.
         """
-        # Validate inputs
         cluster = await self.clusters_repo.get_by_id(cluster_id)
         if not cluster:
             raise ValueError(f"Cluster {cluster_id} not found")
-        
         template = await self.templates_repo.get_by_id(template_id)
         if not template:
             raise ValueError(f"Template {template_id} not found")
-        
-        # Get all suggestions in cluster
         suggestions = await self._get_cluster_suggestions(cluster_id)
         if not suggestions:
             raise ValueError(f"No suggestions found in cluster {cluster_id}")
@@ -78,16 +75,12 @@ class DocumentGenerator:
         Generate document from topic suggestions using iterative LLM processing.
         Returns job payload data for background processing.
         """
-        # Validate inputs
         topic = await self.topics_repo.get_by_id(topic_id)
         if not topic:
             raise ValueError(f"Topic {topic_id} not found")
-        
         template = await self.templates_repo.get_by_id(template_id)
         if not template:
             raise ValueError(f"Template {template_id} not found")
-        
-        # Get all suggestions for topic
         suggestions = await self._get_topic_suggestions(topic_id)
         if not suggestions:
             raise ValueError(f"No suggestions found for topic {topic_id}")
@@ -110,35 +103,24 @@ class DocumentGenerator:
         source_type = job_payload["source_type"]
         source_id = UUID(job_payload["source_id"])
         template_id = UUID(job_payload["template_id"])
-        
-        # Get template and source data
         template = await self.templates_repo.get_by_id(template_id)
         if source_type == "cluster":
             source = await self.clusters_repo.get_by_id(source_id)
             suggestions = await self._get_cluster_suggestions(source_id)
-        else:  # topic
+        else:
             source = await self.topics_repo.get_by_id(source_id)
             suggestions = await self._get_topic_suggestions(source_id)
-        
         if not source or not template or not suggestions:
             raise ValueError("Invalid source, template, or no suggestions found")
-        
-        # Step 1: Create initial document with base context
         document_content = await self._create_initial_document(
             template, source, suggestions, source_type
         )
-        
-        # Step 2: Iteratively enhance with suggestion batches
         document_content = await self._enhance_document_iteratively(
             document_content, suggestions, source, source_type
         )
-        
-        # Step 3: Final refinement
         document_content = await self._finalize_document(
             document_content, suggestions, source, source_type
         )
-        
-        # Create the document record
         from app.adapters.repos.documents_repo import DocumentRepository
         docs_repo = DocumentRepository(self.db)
         
@@ -165,8 +147,6 @@ class DocumentGenerator:
         }
         
         document = await docs_repo.create(document_data)
-        
-        # Create relationships
         if source_type == "cluster":
             await docs_repo.add_cluster_association(document.id, source_id, 1.0)
         else:
@@ -177,8 +157,6 @@ class DocumentGenerator:
     async def _get_cluster_suggestions(self, cluster_id: UUID) -> List[Suggestion]:
         """Get suggestions in a cluster, ordered by similarity/confidence, limited by max_suggestions."""
         from app.domain.models import Suggestion, ClusterMember
-        
-        # Using SQLAlchemy ORM approach
         result = await self.db.execute(
             select(Suggestion)
             .join(ClusterMember, Suggestion.id == ClusterMember.suggestion_id)
@@ -205,8 +183,6 @@ class DocumentGenerator:
         source_type: str,
     ) -> str:
         """Create initial document with basic context and metadata."""
-        
-        # Prepare source context
         if source_type == "cluster":
             source_context = f"""
             **Cluster Information:**
@@ -216,7 +192,7 @@ class DocumentGenerator:
             - Tags: {', '.join(source.tags) if source.tags else 'None'}
             - Total Suggestions: {len(suggestions)}
             """
-        else:  # topic
+        else:
             source_context = f"""
             **Topic Information:**
             - Label: {source.label}
@@ -255,18 +231,15 @@ Template to fill: {template.name} (v{template.version})
 Generate a professional document that fills the template placeholders with the provided information. Focus on structure and high-level insights - specific suggestion details will be added in subsequent iterations."""
 
         try:
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+            return await self.llm_provider.chat_completion(
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
+                model=self.llm_model,
                 temperature=0.3,
                 max_tokens=3000,
             )
-            
-            return response.choices[0].message.content.strip()
-            
         except Exception as e:
             raise ValueError(f"Failed to create initial document: {str(e)}")
     
@@ -317,18 +290,15 @@ New Suggestion Batch to Integrate:
 Please enhance the document by thoughtfully integrating insights from these suggestions. Add specific details, examples, or themes that strengthen the existing content."""
 
             try:
-                response = await self.openai_client.chat.completions.create(
-                    model="gpt-4o-mini",
+                current_content = await self.llm_provider.chat_completion(
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                        {"role": "user", "content": user_prompt},
                     ],
+                    model=self.llm_model,
                     temperature=0.3,
                     max_tokens=4000,
                 )
-                
-                current_content = response.choices[0].message.content.strip()
-                
             except Exception as e:
                 # Log error but continue with current content
                 print(f"Warning: Failed to enhance with batch {batch_index + 1}: {str(e)}")
@@ -370,18 +340,15 @@ Source type: {source_type}
 Make this document publication-ready with strong conclusions and professional presentation."""
 
         try:
-            response = await self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+            return await self.llm_provider.chat_completion(
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
+                model=self.llm_model,
                 temperature=0.2,  # Lower temperature for final polish
                 max_tokens=4000,
             )
-            
-            return response.choices[0].message.content.strip()
-            
         except Exception as e:
             # Return current content if final polish fails
             print(f"Warning: Failed to finalize document: {str(e)}")
