@@ -125,13 +125,18 @@ class TemplateProcessor:
             raise ValueError(f"Failed to process PDF: {str(e)}")
     
     async def _extract_from_word(self, file_content: bytes) -> str:
-        """Extract text from Word document."""
+        """Extract text from Word document (python-docx supports .docx only, not legacy .doc)."""
         try:
             import docx
             
             with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as temp_file:
                 temp_file.write(file_content)
+                temp_file.flush()
+                os.fsync(temp_file.fileno())
                 temp_file_path = temp_file.name
+            
+            if not os.path.exists(temp_file_path) or os.path.getsize(temp_file_path) == 0:
+                raise ValueError("Temporary file was not written correctly")
             
             try:
                 doc = docx.Document(temp_file_path)
@@ -147,7 +152,13 @@ class TemplateProcessor:
         except ImportError:
             raise ValueError("python-docx not installed. Cannot process Word documents.")
         except Exception as e:
-            raise ValueError(f"Failed to process Word document: {str(e)}")
+            err_msg = str(e)
+            if "Package not found" in err_msg or "not a zip file" in err_msg.lower():
+                raise ValueError(
+                    "Failed to process Word document: file may be empty, corrupt, or in legacy .doc format. "
+                    "Please upload a .docx (Office 2007+) file."
+                )
+            raise ValueError(f"Failed to process Word document: {err_msg}")
     
     async def _convert_sample_with_llm(
         self,
