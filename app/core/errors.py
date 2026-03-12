@@ -14,9 +14,20 @@ from starlette.status import (
     HTTP_503_SERVICE_UNAVAILABLE,
 )
 
+from app.core.config import get_settings
 from app.core.logging import get_structured_logger
 
 logger = get_structured_logger(__name__)
+
+
+def _cors_headers(request: Request) -> Dict[str, str]:
+    origin = request.headers.get("origin")
+    if not origin:
+        return {}
+    allowed = frozenset(o.strip() for o in get_settings().cors_origins.split(",") if o.strip())
+    if origin in allowed:
+        return {"Access-Control-Allow-Origin": origin}
+    return {}
 
 
 class DSBException(Exception):
@@ -138,7 +149,6 @@ async def dsb_exception_handler(request: Request, exc: DSBException) -> JSONResp
         path=request.url.path,
         method=request.method,
     )
-    
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -149,6 +159,7 @@ async def dsb_exception_handler(request: Request, exc: DSBException) -> JSONResp
                 "details": exc.details,
             },
         },
+        headers=_cors_headers(request),
     )
 
 
@@ -162,7 +173,6 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
         method=request.method,
         exc_info=exc,
     )
-    
     return JSONResponse(
         status_code=HTTP_500_INTERNAL_SERVER_ERROR,
         content={
@@ -173,6 +183,7 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
                 "details": {},
             },
         },
+        headers=_cors_headers(request),
     )
 
 
@@ -211,4 +222,5 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
                 "details": {},
             },
         },
+        headers=_cors_headers(request),
     )
