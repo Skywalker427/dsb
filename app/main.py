@@ -1,4 +1,6 @@
 from contextlib import asynccontextmanager
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +21,20 @@ logger = get_structured_logger(__name__)
 
 # Get settings
 settings = get_settings()
+ALLOWED_ORIGINS = frozenset(o.strip() for o in settings.cors_origins.split(",") if o.strip())
+
+
+class EnsureCORSHeadersMiddleware(BaseHTTPMiddleware):
+    """Ensure CORS headers are on every response (including 5xx) so the browser can read the body."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        origin = request.headers.get("origin")
+        if origin and origin in ALLOWED_ORIGINS and "access-control-allow-origin" not in {
+            k.lower() for k in response.headers
+        }:
+            response.headers["Access-Control-Allow-Origin"] = origin
+        return response
 
 
 @asynccontextmanager
@@ -52,7 +68,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-_cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+_cors_origins = list(ALLOWED_ORIGINS)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
@@ -60,6 +76,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(EnsureCORSHeadersMiddleware)
 
 # Exception handlers
 app.add_exception_handler(DSBException, dsb_exception_handler)
