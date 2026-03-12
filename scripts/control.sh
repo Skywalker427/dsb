@@ -33,16 +33,21 @@ log_error() {
 
 # Load environment variables
 load_env() {
-    if [ -f "$PROJECT_DIR/.env.local" ]; then
-        export $(cat "$PROJECT_DIR/.env.local" | grep -v '^#' | xargs)
-        log_info "Loaded environment from .env.local"
+    local env_file
+    if [ -n "$ENV_FILE" ] && [ -f "$PROJECT_DIR/$ENV_FILE" ]; then
+        env_file="$PROJECT_DIR/$ENV_FILE"
+    elif [ -f "$PROJECT_DIR/.env.local" ]; then
+        env_file="$PROJECT_DIR/.env.local"
+    elif [ -f "$PROJECT_DIR/.env.production" ]; then
+        env_file="$PROJECT_DIR/.env.production"
     elif [ -f "$PROJECT_DIR/.env" ]; then
-        export $(cat "$PROJECT_DIR/.env" | grep -v '^#' | xargs)
-        log_info "Loaded environment from .env"
+        env_file="$PROJECT_DIR/.env"
     else
-        log_error "No environment file found (.env.local or .env)"
+        log_error "No environment file found (.env.local, .env.production, or .env)"
         return 1
     fi
+    export $(grep -v '^#' "$env_file" | xargs)
+    log_info "Loaded environment from $(basename "$env_file")"
 }
 
 # Check if process is running
