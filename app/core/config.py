@@ -1,4 +1,5 @@
 import json
+import os
 from functools import lru_cache
 
 from pydantic import field_validator
@@ -145,7 +146,7 @@ class Settings(BaseSettings):
         return v
 
     class Config:
-        env_file = ".env.local"
+        env_file = os.getenv("ENV_FILE", ".env.local")
         env_file_encoding = "utf-8"
         case_sensitive = False
 
