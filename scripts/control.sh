@@ -31,22 +31,25 @@ log_error() {
     echo -e "${RED}❌ $1${NC}"
 }
 
-# Load environment variables
+# Load environment variables (source so DATABASE_URL etc. are set exactly as in the file)
 load_env() {
     local env_file
     if [ -n "$ENV_FILE" ] && [ -f "$PROJECT_DIR/$ENV_FILE" ]; then
         env_file="$PROJECT_DIR/$ENV_FILE"
-    elif [ -f "$PROJECT_DIR/.env.local" ]; then
-        env_file="$PROJECT_DIR/.env.local"
     elif [ -f "$PROJECT_DIR/.env.production" ]; then
         env_file="$PROJECT_DIR/.env.production"
+    elif [ -f "$PROJECT_DIR/.env.local" ]; then
+        env_file="$PROJECT_DIR/.env.local"
     elif [ -f "$PROJECT_DIR/.env" ]; then
         env_file="$PROJECT_DIR/.env"
     else
-        log_error "No environment file found (.env.local, .env.production, or .env)"
+        log_error "No environment file found (.env.production, .env.local, or .env)"
         return 1
     fi
-    export $(grep -v '^#' "$env_file" | xargs)
+    set -a
+    # shellcheck source=/dev/null
+    source "$env_file"
+    set +a
     log_info "Loaded environment from $(basename "$env_file")"
 }
 
